@@ -150,7 +150,7 @@ def write_data_to_csv(calibrated_mic_tf, uncalibrated_mic_tf, number_of_bands_pe
     # Write to a csv file the different values
     # Create the header
     header = ['frequency (Hz)', 'value calibrated mic (dB)',
-              'value uncalibrated mic (dB)', 'absolute variation (%)', 'gain factor']
+              'value uncalibrated mic (dB)', 'absolute variation (%)', 'gain factor (N/A)']
 
     # Add data to the csv
     with open(csv_full_path, "w", encoding='UTF8', newline='') as csv_output:
@@ -196,10 +196,10 @@ if __name__ == "__main__":
     print(intro_string)
     try:
         config.read(sys.argv[1])
-        calibrated_mic_gain = config['settings']['calibrated_mic_gain']
-        uncalibrated_mic_gain = config['settings']['uncalibrated_mic_gain']
-        duration = config['settings']['duration']
-        plot_data = config['settings']['plot_data']
+        calibrated_mic_gain = float(config['settings']['calibrated_mic_gain'])
+        uncalibrated_mic_gain = float(config['settings']['uncalibrated_mic_gain'])
+        duration = int(config['settings']['duration'])
+        plot_data = bool(config['settings']['plot_data'])
 
     except:
         print("Configuration file not found, entering the values by hand\n")
