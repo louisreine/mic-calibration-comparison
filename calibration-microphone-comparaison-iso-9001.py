@@ -201,11 +201,10 @@ if __name__ == "__main__":
     print(intro_string)
     try:
         config.read(sys.argv[1])
-        calibrated_mic_gain = float(config['settings']['calibrated_mic_gain'])
-        uncalibrated_mic_gain = float(
-            config['settings']['uncalibrated_mic_gain'])
-        duration = int(config['settings']['duration'])
-        plot_data = bool(config['settings']['plot_data'])
+        calibrated_mic_gain = config.getfloat('settings','calibrated_mic_gain')
+        uncalibrated_mic_gain = config.getfloat('settings', 'uncalibrated_mic_gain')
+        duration = config.getint('settings', 'duration')
+        plot_data = config.getboolean('settings', 'plot_data')
 
     except:
         print("Configuration file not found, entering the values by hand\n")

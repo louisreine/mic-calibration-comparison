@@ -2,4 +2,4 @@
 calibrated_mic_gain = 0.316
 uncalibrated_mic_gain = 0.316
 duration = 5
-plot_data = False
+plot_data = 0
