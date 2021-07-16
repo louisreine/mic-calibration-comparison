@@ -1,4 +1,7 @@
 '''
+Author : Louis Reine 
+Date : 16/07/2021
+Organization : ENSTA IMSIA
 Small script used to calibrate a microphone using a comparison method.
 The first microphone is considered as calibrated, and the second is considered to be calibrated.
 We use farina's method to determine the transfer function of our microphone
@@ -7,7 +10,7 @@ Input 1 is the calibrated microhpone
 Input 2 is the uncalibrated microphone
 '''
 
-# Print iterations progress
+
 import sys
 import configparser
 import measpy as mp
@@ -21,7 +24,7 @@ from measpy import audio
 import matplotlib.pyplot as plt
 plt.style.use('seaborn')
 
-
+#Print interation progress
 def progressBar(iterable, prefix='', suffix='', decimals=1, length=100, fill='█', printEnd="\r"):
     """
     Call in a loop to create terminal progress bar
@@ -111,7 +114,8 @@ def run_calibration_measurement(out_signal_frequencies=[20, 20000], duration=3, 
 
 
 def write_data_to_csv(calibrated_mic_tf, uncalibrated_mic_tf, number_of_bands_per_octave):
-    """Write the output csv file needed for calibration. Proceed by going through all the data band by band and averaging the values of all frequencies in the band. 
+    """
+    Write the output csv file needed for calibration. Proceed by going through all the data band by band and averaging the values of all frequencies in the band. 
 
     Args:
         calibrated_mic_tf (measypy.Spectrum): [The calibrated microphone transfer function]
@@ -143,9 +147,10 @@ def write_data_to_csv(calibrated_mic_tf, uncalibrated_mic_tf, number_of_bands_pe
 
     print("Writing CSV Data...\n")
 
-    #Generate the path of the CSV file
-    csv_string_name = (time.ctime()).replace(":", "_").replace(" ","_")
-    csv_full_path = os.path.join(os.path.realpath( os.path.join(os.getcwd(), os.path.dirname(__file__))), f'resultat_calibration_{csv_string_name}.csv')
+    # Generate the path of the CSV file
+    csv_string_name = (time.ctime()).replace(":", "_").replace(" ", "_")
+    csv_full_path = os.path.join(os.path.realpath(os.path.join(os.getcwd(
+    ), os.path.dirname(__file__))), f'resultat_calibration_{csv_string_name}.csv')
 
     # Write to a csv file the different values
     # Create the header
@@ -197,7 +202,8 @@ if __name__ == "__main__":
     try:
         config.read(sys.argv[1])
         calibrated_mic_gain = float(config['settings']['calibrated_mic_gain'])
-        uncalibrated_mic_gain = float(config['settings']['uncalibrated_mic_gain'])
+        uncalibrated_mic_gain = float(
+            config['settings']['uncalibrated_mic_gain'])
         duration = int(config['settings']['duration'])
         plot_data = bool(config['settings']['plot_data'])
 
@@ -238,10 +244,10 @@ if __name__ == "__main__":
     while csv_answer not in ["y", "n"]:
         print("Please enter a valid input (only y and n accepted")
         csv_answer = input("Do you want to save in a CSV the data ? (y/n)\n")
-    
-    if csv_answer=="y":
+
+    if csv_answer == "y":
         write_data_to_csv(calibrated_mic_tf, uncalibrated_mic_tf, 3)
     else:
         pass
-    
+
     print("Done!")
