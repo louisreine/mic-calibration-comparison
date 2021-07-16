@@ -78,11 +78,11 @@ def run_calibration_measurement(out_signal_frequencies=[20, 20000], duration=3, 
                                             in_desc=['Calibrated mic',
                                                      'Uncalibrated mic'],
                                             # Depends on the mic amp you are using. I use 316mV/Pa for amplifying the signal
-                                            in_cal=[.316, 0.316],
+                                            in_cal=amp_value,
                                             in_unit=['Pa', 'Pa'],
                                             in_dbfs=[1.0, 1.0],
                                             extrat=[0, 0],
-                                            dur=5,
+                                            dur=duration,
                                             in_device='myDAQ1',
                                             out_device='myDAQ1',
                                             out_amp=1.0,
@@ -110,15 +110,13 @@ def run_calibration_measurement(out_signal_frequencies=[20, 20000], duration=3, 
     return calibrated_mic_tf, uncalibrated_mic_tf
 
 
-def write_data_to_csv(calibrated_mic_tf, uncalibrated_mic_tf, number_of_bands_per_octave, csv_full_dir=f"{os.path.dirname(os.path.realpath(__file__))}\\res_calibration{time.ctime(int(time.time()))}.csv"):
+def write_data_to_csv(calibrated_mic_tf, uncalibrated_mic_tf, number_of_bands_per_octave):
     """Write the output csv file needed for calibration. Proceed by going through all the data band by band and averaging the values of all frequencies in the band. 
 
     Args:
         calibrated_mic_tf (measypy.Spectrum): [The calibrated microphone transfer function]
         uncalibrated_mic_tf ([measypy.Spectrum]): [The uncalibrated microphone transfer function]
         number_of_bands_per_octave ([int]): [Number of band to split the octave for easy data readability]
-        csv_full_dir ([string], optional): [Full directory of the csv file's path. Currently written with windows style directory. ex : "C:\mic-calibration\csv_name.csv"]. Defaults to f"{os.path.dirname(os.path.realpath(__file__))}\res_calibration{time.ctime(int(time.time()))}.csv".
-
     """
 
     # To format the results we divide the spectrum into bands
@@ -145,13 +143,17 @@ def write_data_to_csv(calibrated_mic_tf, uncalibrated_mic_tf, number_of_bands_pe
 
     print("Writing CSV Data...\n")
 
+    #Generate the path of the CSV file
+    csv_string_name = (time.ctime()).replace(":", "_").replace(" ","_")
+    csv_full_path = os.path.join(os.path.realpath( os.path.join(os.getcwd(), os.path.dirname(__file__))), f'resultat_calibration_{csv_string_name}.csv')
+
     # Write to a csv file the different values
     # Create the header
     header = ['frequency (Hz)', 'value calibrated mic (dB)',
               'value uncalibrated mic (dB)', 'absolute variation (%)', 'gain factor']
 
     # Add data to the csv
-    with open(csv_full_dir, "w", encoding='UTF8', newline='') as csv_output:
+    with open(csv_full_path, "w", encoding='UTF8', newline='') as csv_output:
         writer = csv.writer(csv_output,  dialect='excel')
         writer.writerow(header)
         number_of_indexes = len(calibrated_mic_tf.freqs)
@@ -221,10 +223,10 @@ if __name__ == "__main__":
             print("Please enter a valid input (int and positive)")
             duration = input("Duration of the logsweep : ")
 
-        plot_answer = bool(input("Do you want to see the data ? (y/n)"))
+        plot_answer = input("Do you want to see the data ? (y/n)\n")
         while plot_answer not in ["y", "n"]:
             print("Please enter a valid input (only y and n accepted")
-            plot_answer = input("Do you want to see the data ? (y/n)")
+            plot_answer = input("Do you want to see the data ? (y/n)\n")
         plot_data = (plot_answer == 'y')
 
     print("Now launching measurement procedure")
@@ -232,10 +234,11 @@ if __name__ == "__main__":
     calibrated_mic_tf, uncalibrated_mic_tf = run_calibration_measurement(out_signal_frequencies=[20, 20000], duration=duration, amp_value=[
         calibrated_mic_gain, uncalibrated_mic_gain], check_measurement=plot_data)
 
-    csv_answer = bool(input("Do you want to save in a CSV file the data ? (y/n)"))
-    while plot_answer not in ["y", "n"]:
+    csv_answer = input("Do you want to save in a CSV file the data ? (y/n)\n")
+    while csv_answer not in ["y", "n"]:
         print("Please enter a valid input (only y and n accepted")
-        csv_answer = input("Do you want to save in a CSV the data ? (y/n)")
+        csv_answer = input("Do you want to save in a CSV the data ? (y/n)\n")
+    
     if csv_answer=="y":
         write_data_to_csv(calibrated_mic_tf, uncalibrated_mic_tf, 3)
     else:
