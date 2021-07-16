@@ -8,7 +8,21 @@ Input 2 is the uncalibrated microphone
 '''
 
 # Print iterations progress
-def progressBar(iterable, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', printEnd = "\r"):
+import sys
+import configparser
+import measpy as mp
+import csv
+import os
+import numpy as np
+import time
+from numpy.lib.function_base import average
+from measpy.ni import ni_run_measurement, ni_get_devices
+from measpy import audio
+import matplotlib.pyplot as plt
+plt.style.use('seaborn')
+
+
+def progressBar(iterable, prefix='', suffix='', decimals=1, length=100, fill='█', printEnd="\r"):
     """
     Call in a loop to create terminal progress bar
     @params:
@@ -22,11 +36,13 @@ def progressBar(iterable, prefix = '', suffix = '', decimals = 1, length = 100, 
     """
     total = len(iterable)
     # Progress Bar Printing Function
-    def printProgressBar (iteration):
-        percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
+
+    def printProgressBar(iteration):
+        percent = ("{0:." + str(decimals) + "f}").format(100 *
+                                                         (iteration / float(total)))
         filledLength = int(length * iteration // total)
         bar = fill * filledLength + '-' * (length - filledLength)
-        print(f'\r{prefix} |{bar}| {percent}% {suffix}', end = printEnd)
+        print(f'\r{prefix} |{bar}| {percent}% {suffix}', end=printEnd)
     # Initial Call
     printProgressBar(0)
     # Update Progress Bar
@@ -36,126 +52,193 @@ def progressBar(iterable, prefix = '', suffix = '', decimals = 1, length = 100, 
     # Print New Line on Complete
     print()
 
-#%%
-EXCEL_VISUALISATION = True
-import measpy as mp
-import matplotlib.pyplot as plt
-from measpy import audio
-from measpy.ni import ni_run_measurement, ni_get_devices
-from numpy.lib.function_base import average
-plt.style.use('seaborn')
-import time
-import numpy as np
-import os
-import csv
 
-script_dir = os.path.dirname(os.path.realpath(__file__))
+def run_calibration_measurement(out_signal_frequencies=[20, 20000], duration=3, amp_value=[1, 1], check_measurement=True):
+    """
+    Function launching measurement of a logsweep between out_signal_frequencies[0] and out_signal_frequencies[1]
+    returning a Spectrum transfer function of the calibrated microphone and the uncalibrated microhpone.
 
-#%%
+    Args:
+        out_signal_frequencies (list, optional): The range of the logsweep. Defaults to [20, 20000].
+        duration (int, optional): The length of the logsweep
+        amp_value (tuple(float,float), optional): The value of the amp used for the calibrated mic and uncalibrated mic in V/Pa. Defaults to [1, 1] 
+        check_measurement (bool, optional): Choose to print the plot of measurement (signal and spectrum). Defaults to True.
 
-out_signal_frequencies = [20,20000]
+    Returns:
+        tuple(measpy.Spectrum, measpy.Spectrum) : tuple of calibrated and uncalibrated transfer function  
+    """
+    # First create a measurement
+    # We send a logsweep signal to use Farina's method
+    calibration_mesurement = mp.Measurement(out_sig="logsweep",
+                                            fs=44100,
+                                            in_map=[1, 2],
+                                            out_map=[1],
+                                            out_desc=['Out1'],
+                                            out_dbfs=[1.0],
+                                            in_desc=['Calibrated mic',
+                                                     'Uncalibrated mic'],
+                                            # Depends on the mic amp you are using. I use 316mV/Pa for amplifying the signal
+                                            in_cal=[.316, 0.316],
+                                            in_unit=['Pa', 'Pa'],
+                                            in_dbfs=[1.0, 1.0],
+                                            extrat=[0, 0],
+                                            dur=5,
+                                            in_device='myDAQ1',
+                                            out_device='myDAQ1',
+                                            out_amp=1.0,
+                                            io_sync=False,
+                                            out_sig_freqs=out_signal_frequencies
+                                            )
 
-#%%
-# First create a measurement
-# We send a logsweep signal to use Farina's method
-calibration_mesurement = mp.Measurement(out_sig="logsweep",
-                    fs = 44100,
-                    in_map=[1,2],
-                    out_map=[1],
-                    out_desc=['Out1'],
-                    out_dbfs=[1.0],
-                    in_desc=['Calibrated mic','Uncalibrated mic'],
-                    in_cal=[0.1,0.1], #Depends on the mic amp you are using. I use 100mV/Pa for amplifying the signal
-                    in_unit=['Pa','Pa'],
-                    in_dbfs=[1.0,1.0],
-                    extrat=[0,0],
-                    dur=5,
-                    in_device='myDAQ1',
-                    out_device='myDAQ1',
-                    out_amp=1.0,
-                    io_sync = False,
-                    out_sig_freqs = out_signal_frequencies
-                    )
+    print("Launching measurement...")
+    ni_run_measurement(calibration_mesurement)
+    print("Measurement done!")
 
-print("Launching measurement...")
-ni_run_measurement(calibration_mesurement)
+    if check_measurement:
+        calibration_mesurement.plot()
+        plt.show()
 
-axes_calibration = calibration_mesurement.plot()
-print("Measurement done!")
-plt.show() #Check the data
+    spectrum = calibration_mesurement.tfe()  # Convert to transfer function
 
-spectrum = calibration_mesurement.tfe() #Convert to transfer function
+    calibrated_mic_tf = spectrum["In1"]
+    uncalibrated_mic_tf = spectrum['In2']
 
+    if check_measurement:
+        calibrated_mic_tf.plot()
+        plt.show()
 
-
-calibrated_mic_tf = spectrum["In1"]
-uncalibrated_mic_tf = spectrum['In2']
-
-calibrated_mic_tf.plot()
-plt.show()
-#%%
-
-# To format the results we divide the spectrum into bands
-# 
-def calculate_band_frequencies(number_of_band_per_octave=3) :
-    factor = np.power(2, 1/number_of_band_per_octave)
-    f_center = 1000
-    while f_center > 20:
-        f_center =f_center / factor
-    frequencies = []
-    while f_center < 20000:
-        
-        frequencies.append(int(np.round(f_center)))
-        f_center = f_center * factor
-    #We add 20000 for convenience 
-    frequencies.append(20000)
-    return frequencies
+    return calibrated_mic_tf, uncalibrated_mic_tf
 
 
+def write_data_to_csv(calibrated_mic_tf, uncalibrated_mic_tf, number_of_bands_per_octave, csv_full_dir=f"{os.path.dirname(os.path.realpath(__file__))}\\res_calibration{time.ctime(int(time.time()))}.csv"):
+    """Write the output csv file needed for calibration. Proceed by going through all the data band by band and averaging the values of all frequencies in the band. 
 
-#%%
+    Args:
+        calibrated_mic_tf (measypy.Spectrum): [The calibrated microphone transfer function]
+        uncalibrated_mic_tf ([measypy.Spectrum]): [The uncalibrated microphone transfer function]
+        number_of_bands_per_octave ([int]): [Number of band to split the octave for easy data readability]
+        csv_full_dir ([string], optional): [Full directory of the csv file's path. Currently written with windows style directory. ex : "C:\mic-calibration\csv_name.csv"]. Defaults to f"{os.path.dirname(os.path.realpath(__file__))}\res_calibration{time.ctime(int(time.time()))}.csv".
+
+    """
+
+    # To format the results we divide the spectrum into bands
+    def calculate_band_frequencies(number_of_band_per_octave=3):
+        """Function that creates the bound frequencies of frequency bands according to the number of bands you want. It starts by dividing the 1000Hz frequency by a factor based on the number of bands you want (2^(1/number_of_bands) until it reaches a frequency lower than 20Hz. Then it goes up again to get all frequencies".
+
+        Args:
+            number_of_band_per_octave (int, optional): [Number of octave]. Defaults to 3.
+
+        Returns:
+            [list]: [list of ascending ordered band frequencies]
+        """
+        factor = np.power(2, 1/number_of_band_per_octave)
+        f_center = 1000
+        while f_center > 20:
+            f_center = f_center / factor
+        frequencies = []
+        while f_center < 20000:
+            frequencies.append(int(np.round(f_center)))
+            f_center = f_center * factor
+        # Adding 20000Hz for convenience
+        frequencies.append(20000)
+        return frequencies
+
+    print("Writing CSV Data...\n")
+
+    # Write to a csv file the different values
+    # Create the header
+    header = ['frequency (Hz)', 'value calibrated mic (dB)',
+              'value uncalibrated mic (dB)', 'absolute variation (%)', 'gain factor']
+
+    # Add data to the csv
+    with open(csv_full_dir, "w", encoding='UTF8', newline='') as csv_output:
+        writer = csv.writer(csv_output,  dialect='excel')
+        writer.writerow(header)
+        number_of_indexes = len(calibrated_mic_tf.freqs)
+        print(f"Number of indexes : {number_of_indexes}")
+        index_band = 0
+        sum_values = [0, 0]
+        amount_sample_band = 0
+        band_frequencies = calculate_band_frequencies(
+            number_of_bands_per_octave)
+        signal_frequencies = calibrated_mic_tf.freqs
+        calibrated_mic_tf_values = calibrated_mic_tf.values
+        uncalibrated_mic_tf_values = uncalibrated_mic_tf.values
+        for index in progressBar(range(number_of_indexes), prefix='Writing data to CSV file', suffix='', decimals=3, length=100, fill='▱', printEnd="\r"):
+            freq = signal_frequencies[index]
+            if not 20 < freq < 20000:
+                continue
+            else:
+                if freq > band_frequencies[index_band] and amount_sample_band != 0:
+                    average_calibrated_mic = sum_values[0] / amount_sample_band
+                    average_uncalibrated_mic = sum_values[1] / \
+                        amount_sample_band
+                    writer.writerow([band_frequencies[index_band+1], average_calibrated_mic, average_uncalibrated_mic, 100 * abs(
+                        average_uncalibrated_mic - average_calibrated_mic) / average_uncalibrated_mic, sum_values[0] / sum_values[1]])
+                    index_band += 1
+                    sum_values = [0, 0]
+                    amount_sample_band = 0
+
+                values = [np.real(calibrated_mic_tf_values[index]),
+                          np.real(uncalibrated_mic_tf_values[index])]
+                amount_sample_band += 1
+                sum_values[0] += values[0]
+                sum_values[1] += values[1]
+    print("Done!")
 
 
-print("Writing CSV Data...\n")
-#Write to a csv file the different values 
+if __name__ == "__main__":
 
-#Create the header
-headers = ['frequency (Hz)', 'value calibrated mic (dB)', 'value uncalibrated mic (dB)', 'absolute variation (%)', 'gain factor']
+    intro_string = "______  ______________ \r\n  /  _/  |/  / __/  _/ _ |\r\n _/ // /|_/ /\\ \\_/ // __ |\r\n/___/_/  /_/___/___/_/ |_|\r\n                          \r\n\r\n\r\n\r\n\r\nWelcome to the microphone calibration utility of IMSIA.\r\n This programm will create a CSV sheet with information to help calibrate a microphone by comparison. \r\nTo calibrate a microphone, please plug them to a Nexus Conditioning Amplifier, then plug the output of the Nexus to Input1 and Input2 of a MyDAQ NI card. \r\nAnalog Input 0 should be the calibrated microphone, Analog Input 1 should be the uncalibrated microphone.\r\nNext plug the speaker to the Analog Ouput 0 of the MyDAQ card (you can amplify it if necessary, be carefull what you do).\r\n"
+    config = configparser.ConfigParser()
+    print(intro_string)
+    try:
+        config.read(sys.argv[1])
+        calibrated_mic_gain = config['settings']['calibrated_mic_gain']
+        uncalibrated_mic_gain = config['settings']['uncalibrated_mic_gain']
+        duration = config['settings']['duration']
+        plot_data = config['settings']['plot_data']
 
-#Add data to the csv
+    except:
+        print("Configuration file not found, entering the values by hand\n")
 
+        print("Enter the amplification factor of the Nexus Amplifier (float in V/Pa):")
+        calibrated_mic_gain = float(
+            input("Gain of the calibrated microphone : "))
+        while not(isinstance(calibrated_mic_gain, float) and calibrated_mic_gain > 0.0):
+            print("Please enter a valid input (float and positive)")
+            calibrated_mic_gain = input("Gain of the calibrated microphone : ")
 
+        uncalibrated_mic_gain = float(
+            input("Gain of the uncalibrated microphone : "))
+        while not(isinstance(uncalibrated_mic_gain, float) and uncalibrated_mic_gain > 0.0):
+            print("Please enter a valid input (float and positive)")
+            uncalibrated_mic_gain = input(
+                "Gain of the uncalibrated microphone : ")
 
-with open(f"{script_dir}\\res_calibration{str(time.time())}.csv", "w", encoding='UTF8', newline='') as csv_output:
-    writer = csv.writer(csv_output,  dialect='excel')
-    writer.writerow(headers)
-    number_of_indexes = len(calibrated_mic_tf.freqs)
-    print(f"Number of indexes : {number_of_indexes}")
-    index_band = 0
-    sum_values = [0,0]
-    amount_sample_band = 0
-    band_frequencies = calculate_band_frequencies(number_of_band_per_octave = 12)
-    signal_frequencies = calibrated_mic_tf.freqs
-    calibrated_mic_tf_values = calibrated_mic_tf.values
-    uncalibrated_mic_tf_values = uncalibrated_mic_tf.values
-    for index in progressBar(range(number_of_indexes), prefix = 'Writing data to csv file', suffix = '', decimals = 3, length = 100, fill = '█', printEnd = "\r"):
-        freq = signal_frequencies[index]
-        if not 20 < freq < 20000:
-            continue
-        else: 
-            if freq > band_frequencies[index_band] and amount_sample_band != 0:
-                average_calibrated_mic = sum_values[0] / amount_sample_band
-                average_uncalibrated_mic = sum_values[1] / amount_sample_band
-                writer.writerow([band_frequencies[index_band+1], average_calibrated_mic, average_uncalibrated_mic, 100 * abs(average_uncalibrated_mic - average_calibrated_mic) / average_uncalibrated_mic,sum_values[0] / sum_values[1]]) 
-                index_band +=1
-                sum_values = [0,0]
-                amount_sample_band = 0
+        duration = int(input("Duration of the logsweep : "))
+        while not(isinstance(duration, int) and duration > 0):
+            print("Please enter a valid input (int and positive)")
+            duration = input("Duration of the logsweep : ")
 
-            values = [np.real(calibrated_mic_tf_values[index]), np.real(uncalibrated_mic_tf_values[index])]
-            amount_sample_band += 1
-            sum_values[0] += values[0]
-            sum_values[1] += values[1]
+        plot_answer = bool(input("Do you want to see the data ? (y/n)"))
+        while plot_answer not in ["y", "n"]:
+            print("Please enter a valid input (only y and n accepted")
+            plot_answer = input("Do you want to see the data ? (y/n)")
+        plot_data = (plot_answer == 'y')
+
+    print("Now launching measurement procedure")
+
+    calibrated_mic_tf, uncalibrated_mic_tf = run_calibration_measurement(out_signal_frequencies=[20, 20000], duration=duration, amp_value=[
+        calibrated_mic_gain, uncalibrated_mic_gain], check_measurement=plot_data)
+
+    csv_answer = bool(input("Do you want to save in a CSV file the data ? (y/n)"))
+    while plot_answer not in ["y", "n"]:
+        print("Please enter a valid input (only y and n accepted")
+        csv_answer = input("Do you want to save in a CSV the data ? (y/n)")
+    if csv_answer=="y":
+        write_data_to_csv(calibrated_mic_tf, uncalibrated_mic_tf, 3)
+    else:
+        pass
     
-# %%
-
-print("Done!")
+    print("Done!")
